@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Controle</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #f2f4f8;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .form-container,
+      .sections {
+        background: #fff;
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+        width: 100%;
+        max-width: 600px;
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        text-align: center;
+        margin-bottom: 1.5rem;
+      }
+
+      label {
+        display: block;
+        margin-top: 1rem;
+        font-weight: bold;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        font-size: 1rem;
+      }
+
+      input[type='file'] {
+        padding: 0.4rem;
+      }
+
+      button {
+        margin-top: 1.5rem;
+        width: 100%;
+        background: #0077ff;
+        color: #fff;
+        border: none;
+        padding: 0.75rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      button:hover {
+        background: #005ed6;
+      }
+
+      .section {
+        border-top: 1px solid #ddd;
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+
+      .section img {
+        max-width: 100%;
+        margin-top: 0.5rem;
+        border-radius: 8px;
+      }
+
+      .section input,
+      .section textarea {
+        margin-top: 0.25rem;
+      }
+
+      .section button {
+        margin-top: 0.5rem;
+        background: #28a745;
+      }
+
+      .section button:hover {
+        background: #1e7e34;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="form-container">
+      <h2>Enviar Seção</h2>
+      <form id="section-form">
+        <label for="title">Título</label>
+        <input type="text" id="title" name="title" required />
+
+        <label for="description">Descrição</label>
+        <textarea
+          id="description"
+          name="description"
+          rows="4"
+          required
+        ></textarea>
+
+        <label for="images">Imagens</label>
+        <input
+          type="file"
+          id="images"
+          name="images"
+          multiple
+          accept="image/*"
+        />
+
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+
+    <div class="sections">
+      <h2>Seções Existentes</h2>
+      <div id="sections-list"></div>
+    </div>
+
+    <script>
+      const form = document.getElementById('section-form')
+      const list = document.getElementById('sections-list')
+
+      async function toBase64(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.readAsDataURL(file)
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = reject
+        })
+      }
+
+      async function fetchSections() {
+        const res = await fetch('/api/sections')
+        const sections = await res.json()
+
+        list.innerHTML = ''
+        sections.forEach((section) => {
+          const div = document.createElement('div')
+          div.className = 'section'
+          div.innerHTML = `
+            <label>Título</label>
+            <input type="text" value="${section.title}" id="title-${
+            section.id
+          }" />
+            
+            <label>Descrição</label>
+            <textarea rows="3" id="desc-${section.id}">${
+            section.description
+          }</textarea>
+
+            <label>Imagens</label>
+            <div id="imgs-${section.id}">
+              ${section.images.map((img) => `<img src="${img}" />`).join('')}
+            </div>
+            <input type="file" id="newimg-${
+              section.id
+            }" multiple accept="image/*" />
+
+            <button onclick="editSection('${section.id}')">Salvar</button>
+          `
+          list.appendChild(div)
+        })
+      }
+
+      async function editSection(id) {
+        const title = document.getElementById(`title-${id}`).value.trim()
+        const description = document.getElementById(`desc-${id}`).value.trim()
+        const fileInput = document.getElementById(`newimg-${id}`)
+        const files = fileInput.files
+        let images = []
+
+        if (files.length > 0) {
+          images = await Promise.all([...files].map(toBase64))
+        }
+
+        const payload = { title, description }
+        if (images.length) payload.images = images
+
+        const res = await fetch(`/api/sections/${id}${location.search}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        if (res.ok) {
+          alert('Atualizado com sucesso!')
+          fetchSections()
+        } else {
+          alert('Erro ao atualizar.')
+        }
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+
+        const title = form.title.value.trim()
+        const description = form.description.value.trim()
+        const files = form.images.files
+        const imagesBase64 = await Promise.all([...files].map(toBase64))
+
+        const payload = {
+          title,
+          description,
+          images: imagesBase64,
+        }
+
+        const res = await fetch(`/api/sections${location.search}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        if (res.ok) {
+          alert('Enviado com sucesso!')
+          form.reset()
+          fetchSections()
+        } else {
+          alert('Erro ao enviar.')
+        }
+      })
+
+      fetchSections()
+    </script>
+  </body>
+</html>
